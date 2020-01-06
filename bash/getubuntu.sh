@@ -3,31 +3,31 @@ echo -e "Ubuntu ISO Downloader for Desktop x64 architectures\n"
 
 # The following code segment checks for internet connectivity, then enters an if statement.
 echo -e "This bash script requires an active internet connection and may also require superuser permissions.\nPlease ensure that you have both before proceeding."
-cat < /dev/null > /dev/tcp/8.8.8.8/53; ONLINE=$( echo $? )
+cat < /dev/null > /dev/tcp/8.8.8.8/53; ONLINE=$? 
 if [ $ONLINE -eq 0 ]; then
     echo -e "\nThe network connection is up. Proceeding...\n"
 else
   echo -e "\nThe network connection is down.\nPlease connect to the internet and try again."
-  exit
+  exit 1
 fi
 
-# The following code segment checks if the wget dependency is installed, and if apt-get command exists, downloads the missing command.
-echo -e "\nIn order for this bash script to work you first need to install the wget package, if not present.\nThis will require superuser permissions."
+# The following code segment checks if the wget dependency is installed, and, if apt-get is present, installs the missing package.
+echo -e "\nIn order for this bash script to work the wget package needs to be installed, if not present.\nIn such case, the script will try to install it."
 if [[ -z $(which wget) ]]; then
     echo -e "\nwget package is not installed."
     if [[ ! -z $(which apt-get) ]]; then
         echo -e "\nAttempting to update package list and install via APT. Please provide superuser permissions.\n"
         sudo apt-get update
         sudo apt-get install wget
-        if [ $? -eq 0 ]; then
-            echo -e "\nDone. Proceeding...\n"
-        else
-            echo -e "\nThere was an error while installing the missing wget package. apt-get exit code is: $?\nPlease install wget manually and rerun this script."
-            exit
+        INSTALLSTATUS=$?
+        if [ $INSTALLSTATUS -ne 0 ]; then
+            echo -e "\nThere was an error while installing the missing wget package.\nPlease install wget manually and rerun this script."
+            exit 127
         fi
+        echo -e "\nDone. Proceeding...\n"
     else
         echo -e "\nUnable to retrieve missing package wget.\nYou'll have to manually install it and rerun this script."
-        exit
+        exit 127
     fi
 fi
 
@@ -38,13 +38,13 @@ cleanup () {
     rm vnrs.txt
 }
 
-# The following code segment uses wget in spider mode, pipes its output to grep to be filtered for ftp urls using regex, then sort to only keep unique occurrences of urls, saves output in urls.txt, then reads the lines into an array
+# The following code segment uses wget in spider mode, pipes its output to grep to be filtered for ftp urls using regex, then pipes to sort to only keep unique occurrences of pattern matches, saves output in urls.txt, reads the lines of text into an array
 echo -e "\nFetching download URLs for available Ubuntu versions and building menu. Please wait..."
 wget -r --spider -l0 -A iso ftp://releases.ubuntu.com/releases/.pool/ 2>&1 | grep -Eo '(ftp)://[^/"].+\-desktop\-amd64\.iso' | sort -u > urls.txt
 readarray urlarr < urls.txt
 
-# The following code segment pipes the cat output of urls.txt to awk to manipulate and only print the version numbers into a text file called vnrs.txt, then read into an array
-cat urls.txt | awk -F"-" '{ print $2 }' > vnrs.txt
+# The following code processes urls.txt with awk to only print the version numbers into a text file called vnrs.txt, then reads the file into an array
+awk -F"-" '{ print $2 }' urls.txt > vnrs.txt
 readarray vnrarr < vnrs.txt
 
 # The following code segment checks if the array is empty. If it is, it exits.
@@ -52,7 +52,7 @@ if [ ${#vnrarr[@]} -eq 0 ]; then
     echo -e "\nThe filelist returned seems to be empty.\nPlease check connectivity and retry later.\nIf this issue persists, please contact the developer of this script.\n"
     echo -e "Tidying up and exiting script."
     cleanup
-    exit
+    exit 1
 fi
 
 # The following code segment generates a selection menu using version numbers as entries, matching the choice to the array of urls
@@ -73,7 +73,7 @@ while [[ $VERSION = "" ]]; do
             if [[ ! $REPLY =~ ^[Yy]$ ]]; then
                 echo -e "\nUser aborted. Tidying up and exiting script."
                 cleanup
-                exit
+                exit 0
             fi
 
 # The following code segment utilizes wget to download the file, in quiet mode, resumable and with infinite tries
